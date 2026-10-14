@@ -10,9 +10,11 @@ It is an independent DeepSeek Harness plugin. It also has a small CLI. It does n
 
 ## Try it locally
 
-Requires Node.js 22.19 or newer. From this checkout:
+Requires Node.js 22.19 or newer. Clone the repository and try the synthetic demo:
 
 ```sh
+git clone https://github.com/po-et/dsh-sheet-diff.git
+cd dsh-sheet-diff
 npm ci --ignore-scripts
 npm test
 npm run demo
@@ -33,14 +35,13 @@ Compare CSV with CSV, or XLSX with XLSX. Mixed-format comparisons are rejected i
 
 ## Use with DeepSeek Harness
 
-Build the distribution tarball, then add it to a profile:
+Install the versioned release bundle into a profile:
 
 ```sh
-npm pack
-dsh plugin --profile YOUR_PROFILE add /absolute/path/dsh-sheet-diff-0.1.0.tgz
+dsh plugin --profile YOUR_PROFILE add https://github.com/po-et/dsh-sheet-diff/releases/download/v0.1.0/dsh-sheet-diff-0.1.0.tgz
 ```
 
-Restart that profile after installation. The package ships JavaScript and a `dsh.bundle` patch; there is no plugin build step or install script. Do not assume a public npm package or GitHub release exists until a release link is available.
+Restart that profile after installation. The package ships JavaScript and a `dsh.bundle` patch; there is no plugin build step or install script. You can also build the bundle from source with `npm pack` and install its local absolute path. Releases are distributed through [GitHub Releases](https://github.com/po-et/dsh-sheet-diff/releases); this project is not published to npm.
 
 Tested against Harness `0.2.0-rc.2` and `0.2.1-alpha.2`, with explicit preview-version peer ranges. Both were installed into fresh profiles and exercised through the official profile boot entrypoint without a model call. HMR was disabled only in the test profiles; the source-built alpha host also logged unrelated optional Typert import warnings.
 
