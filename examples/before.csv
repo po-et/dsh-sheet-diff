@@ -1,0 +1,4 @@
+OrderID,Customer,Amount,Status
+ORD-101,Northwind,1200,open
+ORD-102,Acme,800,open
+ORD-103,Contoso,350,paid

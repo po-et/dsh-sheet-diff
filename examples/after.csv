@@ -1,0 +1,7 @@
+Status,Amount,OrderID,Customer
+paid,350,ORD-103,Contoso
+open,1450,ORD-101,Northwind
+open,920,ORD-102,Acme
+open,500,ORD-104,Fabrikam
+open,270,ORD-105,Adventure Works
+open,110,ORD-106,Woodgrove

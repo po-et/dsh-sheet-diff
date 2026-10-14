@@ -1,0 +1,41 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+const cli = fileURLToPath(new URL('../src/cli.js', import.meta.url));
+const run = (...args) => spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
+test('CLI produces a report without editing inputs and refuses overwrites', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'sheetdiff-cli-'));
+  const before = join(directory, 'before.csv'), after = join(directory, 'after.csv'), out = join(directory, 'review');
+  await writeFile(before, 'id,value\na,1\nb,2\n');
+  await writeFile(after, 'value,id\n2,b\n3,a\n');
+  const result = run(before, after, '--key', 'id', '--out', out);
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(await readFile(join(out, 'report.json'), 'utf8'));
+  assert.equal(report.summary.changedCells, 1);
+  assert.equal(await readFile(before, 'utf8'), 'id,value\na,1\nb,2\n');
+  assert.equal(await readFile(after, 'utf8'), 'value,id\n2,b\n3,a\n');
+  const html = await readFile(join(out, 'report.html'), 'utf8');
+  assert.notEqual(run(before, after, '--key', 'id', '--out', out).status, 0);
+  assert.equal(await readFile(join(out, 'report.html'), 'utf8'), html);
+  const reviewPath = join(directory, 'comments.json');
+  await writeFile(reviewPath, JSON.stringify({ schemaVersion: 1, reportId: report.reportId,
+    sourceHashes: { before: report.sources.before.sha256, after: report.sources.after.sha256 },
+    comments: [{ changeId: report.changes[0].id, text: 'Check this value.' }] }));
+  const imported = run('review', join(out, 'report.json'), reviewPath);
+  assert.equal(imported.status, 0, imported.stderr);
+  assert.equal(JSON.parse(imported.stdout).comments[0].change.id, report.changes[0].id);
+});
+test('CLI rejects invalid options and ambiguous duplicate keys', async () => {
+  assert.notEqual(run('a.csv', 'b.csv', '--wat', 'x').status, 0);
+  assert.notEqual(run('a.csv', 'b.csv', '--key', 'id').status, 0);
+  const directory = await mkdtemp(join(tmpdir(), 'sheetdiff-cli-'));
+  const file = join(directory, 'duplicate.csv');
+  await writeFile(file, 'id,value\nx,1\nx,2\n');
+  const result = run(file, file, '--key', 'id', '--out', join(directory, 'review'));
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /duplicate/i);
+});

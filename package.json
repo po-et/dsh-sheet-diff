@@ -1,0 +1,37 @@
+{
+  "name": "dsh-sheet-diff",
+  "version": "0.1.0",
+  "description": "Read-only, key-aligned spreadsheet review for DeepSeek Harness",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.19.0" },
+  "main": "./src/plugin.js",
+  "exports": { ".": "./src/plugin.js", "./core": "./src/compare.js", "./report": "./src/report.js", "./review": "./src/review.js" },
+  "bin": { "sheet-diff": "./src/cli.js" },
+  "files": ["src/", "cordis.patch.yml", "docs/review-demo.jpg", "README.md", "SECURITY.md", "LICENSE"],
+  "keywords": ["dsh-plugin", "spreadsheet", "xlsx", "csv", "diff", "review"],
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "demo": "node scripts/demo.js",
+    "smoke:host": "node --expose-internals scripts/host-smoke.js"
+  },
+  "dependencies": { "exceljs": "4.4.0", "yauzl": "3.4.0" },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-tools": "0.2.0-rc.2 || 0.2.1-alpha.2",
+    "@deepseek-ai/dsh-fs": "0.2.0-rc.2 || 0.2.1-alpha.2",
+    "@deepseek-ai/dsh-sandbox-policy": "0.2.0-rc.2 || 0.2.1-alpha.2"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.5",
+    "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-fs": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-sandbox-policy": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-system-prompt": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-session-projection": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-fs-local": "0.2.0-rc.2",
+    "yaml": "2.9.1"
+  }
+}

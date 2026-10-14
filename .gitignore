@@ -1,0 +1,4 @@
+node_modules/
+*.tgz
+artifacts/
+.DS_Store
