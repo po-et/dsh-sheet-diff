@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+    branches: [main]
+    paths: ['.github/workflows/release.yml']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to publish
+        required: true
+        default: v0.1.0
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sheetdiff-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'po-et/dsh-sheet-diff'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || 'v0.1.0' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Check tag matches package version
+        run: test "$RELEASE_TAG" = "v$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')"
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run smoke:host
+      - name: Pack and checksum
+        run: |
+          mkdir release-artifacts
+          npm pack --pack-destination release-artifacts
+          cd release-artifacts
+          sha256sum dsh-sheet-diff-*.tgz > SHA256SUMS
+      - name: Publish versioned bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: |
+            Initial public release of SheetDiff.
+
+            Compare CSV/XLSX tables by business keys and column headers. Review value, type, formula and saved-result changes in a local HTML report, then export comments for follow-up in Harness.
+
+            Inputs are read-only; formulas are not recalculated. Formatting and charts are outside the comparison scope.
+
+            The attached bundle installs with `dsh plugin --profile YOUR_PROFILE add <tarball URL>`. See the README for examples and limits. SHA256SUMS covers the attached bundle.
+
+            Validation: 53 tests on Node 22/24/26, plus fresh-profile installation and tool calls on Harness 0.2.0-rc.2 and 0.2.1-alpha.2. This workflow also reruns the tests and real Cordis host smoke before publishing.
+        run: |
+          printf '%s\n' "$RELEASE_NOTES" > release-artifacts/release-notes.md
+          gh release create "$RELEASE_TAG" release-artifacts/dsh-sheet-diff-*.tgz release-artifacts/SHA256SUMS --repo "$GITHUB_REPOSITORY" --verify-tag --title "SheetDiff $RELEASE_TAG" --notes-file release-artifacts/release-notes.md
