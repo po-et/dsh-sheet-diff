@@ -14,6 +14,15 @@ async function xlsx(rows, columns = ['ID', 'Amount', 'Note'], name = 'Data') {
 const csvOptions = { beforeName: 'before.csv', afterName: 'after.csv', keyColumns: ['ID'] };
 const csv = text => Buffer.from(text);
 
+test('out-of-range header rows cannot produce a false unchanged report', async () => {
+  await assert.rejects(compareBuffers(csv('ID,Amount\n1,10'), csv('ID,Amount\n1,999'), {
+    ...csvOptions, headerRow: 3,
+  }), /header row 3.*after.*nonempty data/);
+  await assert.rejects(compareBuffers(await xlsx([[1, 10]]), await xlsx([[1, 999]]), {
+    ...options, headerRow: 3,
+  }), /header row 3.*after.*nonempty data/);
+});
+
 test('aligns typed row keys and exact header names despite row/column order', async () => {
   const before = await xlsx([[1, 42, 'one'], [2, 8, 'two']]);
   const after = await xlsx([['two', 8, 2], ['one', 42, 1]], ['Note', 'Amount', 'ID']);

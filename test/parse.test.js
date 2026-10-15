@@ -40,6 +40,28 @@ test('empty inputs and trailing blank CSV columns do not invent data', async () 
   assert.equal(sheet.rows[0].cells.has(undefined), false);
 });
 
+test('a header row after nonempty data fails instead of discarding the sheet', async () => {
+  for (const suffix of ['', '\n,,\n,,']) {
+    await assert.rejects(parseBuffer(Buffer.from(`ID,Value\n1,a${suffix}`), 'data.csv', { headerRow: 3 }), /header row 3.*after.*nonempty data/);
+  }
+  const book = new ExcelJS.Workbook();
+  const sheet = book.addWorksheet('Data');
+  sheet.addRows([['ID', 'Value'], [1, 'a']]);
+  sheet.getCell('A5').font = { bold: true };
+  await assert.rejects(parseBuffer(Buffer.from(await book.xlsx.writeBuffer()), 'data.xlsx', { headerRow: 3 }), /header row 3.*after.*nonempty data/);
+});
+
+test('custom header rows still allow preambles, empty tables and truly empty sheets', async () => {
+  const parsed = await parseBuffer(Buffer.from('Preamble\nID,Value\n1,a'), 'data.csv', { headerRow: 2 });
+  assert.deepEqual(parsed.sheets[0].columns, ['ID', 'Value']);
+  assert.equal(parsed.sheets[0].rows[0].rowNumber, 3);
+  const emptyTable = await parseBuffer(Buffer.from('Preamble\nID,Value'), 'data.csv', { headerRow: 2 });
+  assert.deepEqual(emptyTable.sheets[0].columns, ['ID', 'Value']);
+  assert.deepEqual(emptyTable.sheets[0].rows, []);
+  const emptySheet = await parseBuffer(Buffer.from('\n,,\n'), 'data.csv', { headerRow: 3 });
+  assert.deepEqual(emptySheet.sheets[0], { name: 'CSV', columns: [], rows: [] });
+});
+
 test('input and CSV field resource bounds are explicit', async () => {
   await assert.rejects(parseBuffer(Buffer.alloc(PARSE_LIMITS.inputBytes + 1), 'large.csv'), /exceeds 20 MiB/);
   await assert.rejects(parseBuffer(Buffer.from(`ID,Value\n${'1,a\n'.repeat(50000)}`), 'large.csv'), /exceeds 100000 fields/);

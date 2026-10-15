@@ -40,10 +40,15 @@ function meaningful(cell) { return cell.type !== 'blank' && !(cell.type === 'str
 function tabulate(name, rawRows, headerRow) {
   const header = rawRows.get(headerRow) ?? new Map();
   let maxColumn = 0;
+  let dataBeforeHeader = false;
   for (const [rowNumber, row] of rawRows) {
-    if (rowNumber < headerRow) continue;
-    for (const [column, cell] of row) if (meaningful(cell)) maxColumn = Math.max(maxColumn, column);
+    for (const [column, cell] of row) {
+      if (!meaningful(cell)) continue;
+      if (rowNumber < headerRow) dataBeforeHeader = true;
+      else maxColumn = Math.max(maxColumn, column);
+    }
   }
+  if (maxColumn === 0 && dataBeforeHeader) throw new Error(`Sheet ${JSON.stringify(name)} has header row ${headerRow} after all nonempty data; choose an existing header row.`);
   const columns = [];
   const seen = new Set();
   for (let column = 1; column <= maxColumn; column++) {

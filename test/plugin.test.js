@@ -93,7 +93,7 @@ test('canonical containment blocks traversal and symlink escapes for reads and o
   } finally { await ctx.fiber.dispose(); }
 });
 
-test('schema validation, empty keys and cancellation prevent artifact writes', async () => {
+test('schema validation, invalid header rows, empty keys and cancellation prevent artifact writes', async () => {
   const workspace = await fixture();
   const { ctx } = await createHost(workspace);
   try {
@@ -101,6 +101,7 @@ test('schema validation, empty keys and cancellation prevent artifact writes', a
       { ...compareArgs, keyColumns: [] },
       { ...compareArgs, keyColumns: ['id', 'id'] },
       { ...compareArgs, headerRow: 0 },
+      { ...compareArgs, headerRow: 5 },
       { ...compareArgs, keyColumns: 'id' },
     ]) {
       assert.equal((await dispatch(ctx, 'sheet_diff_compare', args)).isError, true);

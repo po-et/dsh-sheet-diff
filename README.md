@@ -77,6 +77,7 @@ Comments must match the report ID, both input hashes and known change IDs. Old o
 ## Comparison rules
 
 - Column names and keys match exactly. Composite keys include cell types; numeric `42` is different from text `"42"`. Duplicate keys, missing keys and duplicate headers fail rather than being guessed.
+- A header row after all nonempty data is rejected instead of producing an empty comparison. Preambles before a valid header and truly empty sheets remain supported.
 - CSV is comma-delimited UTF-8, with quoted fields, embedded newlines and a BOM supported. Values remain text; CSV formulas are not inferred.
 - XLSX preserves the distinction between numbers, text, booleans, dates, errors and formulas. Formula text and saved cached results are separate aspects of a change. A cache is **not** a fresh calculation.
 - Formula caches containing an explicit empty string are rejected in v0.1: the underlying reader cannot reliably distinguish them from a missing cache. Zero and false caches are preserved.
