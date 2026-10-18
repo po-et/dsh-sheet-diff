@@ -80,6 +80,7 @@ Comments must match the report ID, both input hashes and known change IDs. Old o
 - A header row after all nonempty data is rejected instead of producing an empty comparison. Preambles before a valid header and truly empty sheets remain supported.
 - CSV is comma-delimited UTF-8, with quoted fields, embedded newlines and a BOM supported. Values remain text; CSV formulas are not inferred.
 - XLSX preserves the distinction between numbers, text, booleans, dates, errors and formulas. Formula text and saved cached results are separate aspects of a change. A cache is **not** a fresh calculation.
+- Dates stored as ISO 8601 cells (`t="d"`, for example with openpyxl `iso_dates=True`) are rejected because the underlying reader misreads them as numbers. Re-export using numeric Excel date storage (`iso_dates=False` in openpyxl); both the 1900 and 1904 date systems remain supported. Ordinary text containing an ISO date stays text. This check covers every worksheet, including unselected sheets.
 - Formula caches containing an explicit empty string are rejected in v0.1: the underlying reader cannot reliably distinguish them from a missing cache. Zero and false caches are preserved.
 - Formula text is compared literally. Moving a formula can change its A1 references while preserving meaning; SheetDiff does not normalize that equivalence.
 - Blank rows are skipped. Added/removed rows include their populated fields. Added/removed columns produce structural changes, plus cell changes for populated values in retained rows.

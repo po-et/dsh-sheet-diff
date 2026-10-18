@@ -99,6 +99,11 @@ function inspectWorksheetXml(xml, part, budget) {
     if (name === 'c') {
       finishCell();
       cell = { type: attributes.get('t'), reference: attributes.get('r'), formula: false, emptyCache: false };
+      // ExcelJS 4.4 reads ISO dates as numbers (for example, both dates in 2026
+      // become 2026). Include XML character references for the single-letter type.
+      if (/^(?:d|&#0*100;|&#x0*64;)$/.test(cell.type ?? '')) {
+        throw new Error(`Unsupported ISO 8601 date cell in ${part} at ${cell.reference ?? 'an unaddressed cell'}; ExcelJS cannot preserve this storage format. Re-export dates using numeric date storage (for example, openpyxl iso_dates=False) before comparing.`);
+      }
       budget.cells += 1;
       if (budget.cells > MAX_XML_CELLS) throw new Error(`XLSX exceeds ${MAX_XML_CELLS} serialized cells before parsing, including styled empty cells.`);
       if (attributes.has('r')) checkedCoordinate(attributes.get('r'), part);
