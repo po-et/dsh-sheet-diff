@@ -20,7 +20,13 @@ function spreadsheetCell(cell, warnings) {
   if (raw && typeof raw === 'object' && ('formula' in raw || 'sharedFormula' in raw)) {
     const formula = cell.formula;
     if (typeof formula !== 'string' || formula.length === 0) throw new Error(`Unsupported or unresolved formula at ${cell.address}.`);
-    if (/\[[^\]]+\][^!]*!/.test(formula)) throw new Error(`External workbook formula is unsupported at ${cell.address}.`);
+    // Excel escapes quotes inside string literals by doubling them. Literal text
+    // can resemble an external reference without referring to another workbook.
+    const literalsMasked = formula.replace(/"(?:[^"]|"")*"/g, '""');
+    // INDIRECT can turn its text argument into a workbook reference. Keep the
+    // original conservative check for these formulas rather than resolving it.
+    const references = /\bINDIRECT\s*\(/i.test(literalsMasked) ? formula : literalsMasked;
+    if (/\[[^\]]+\][^!]*!/.test(references)) throw new Error(`External workbook formula is unsupported at ${cell.address}.`);
     // ExcelJS's cell.value getter drops 0/false caches, while cell.result retains them.
     return { type: 'formula', value: null, formula, cache: cell.result === undefined ? null : scalar(cell.result) };
   }
