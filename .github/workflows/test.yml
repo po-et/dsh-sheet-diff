@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: [22, 24]
+        node: [24, 26]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -20,3 +20,26 @@ jobs:
       - run: npm test
       - run: npm run smoke:host
       - run: npm pack --dry-run
+  profile:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        harness: ['0.2.1-rc.2', '0.2.1-rc.3']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm install --global pnpm@11.7.0 --ignore-scripts --registry=https://registry.npmjs.org
+      - name: Install official Harness runtime
+        env:
+          HARNESS_VERSION: ${{ matrix.harness }}
+        run: npm install --prefix "$RUNNER_TEMP/harness" --ignore-scripts --registry=https://registry.npmjs.org "@deepseek-ai/dsh@$HARNESS_VERSION"
+      - name: Pack and exercise a fresh profile
+        run: |
+          mkdir profile-artifacts
+          npm pack --ignore-scripts --pack-destination profile-artifacts
+          npm run smoke:profile -- "$RUNNER_TEMP/harness/node_modules/@deepseek-ai/dsh" "$PWD"/profile-artifacts/dsh-sheet-diff-*.tgz

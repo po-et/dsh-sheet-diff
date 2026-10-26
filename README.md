@@ -10,7 +10,7 @@ It is an independent DeepSeek Harness plugin. It also has a small CLI. It does n
 
 ## Try it locally
 
-Requires Node.js 22.19 or newer. Clone the repository and try the synthetic demo:
+Requires Node.js 24.9 or newer. Clone the repository and try the synthetic demo:
 
 ```sh
 git clone https://github.com/po-et/dsh-sheet-diff.git
@@ -38,41 +38,49 @@ Compare CSV with CSV, or XLSX with XLSX. Mixed-format comparisons are rejected i
 Install the versioned release bundle into a profile:
 
 ```sh
-dsh plugin --profile YOUR_PROFILE add https://github.com/po-et/dsh-sheet-diff/releases/download/v0.1.0/dsh-sheet-diff-0.1.0.tgz
+dsh plugin --profile YOUR_PROFILE add https://github.com/po-et/dsh-sheet-diff/releases/download/v0.2.0/dsh-sheet-diff-0.2.0.tgz
 ```
 
 Restart that profile after installation. The package ships JavaScript and a `dsh.bundle` patch; there is no plugin build step or install script. You can also build the bundle from source with `npm pack` and install its local absolute path. Releases are distributed through [GitHub Releases](https://github.com/po-et/dsh-sheet-diff/releases); this project is not published to npm.
 
-Tested against Harness `0.2.0-rc.2` and `0.2.1-alpha.2`, with explicit preview-version peer ranges. Both were installed into fresh profiles and exercised through the official profile boot entrypoint without a model call. HMR was disabled only in the test profiles; the source-built alpha host also logged unrelated optional Typert import warnings.
+Version 0.2 targets Harness `0.2.1-rc.2` (npm default) and `0.2.1-rc.3` (preview), using explicit peer ranges. Pack with `npm pack`, then run `npm run smoke:profile -- /absolute/path/to/host/node_modules/@deepseek-ai/dsh /absolute/path/to/dsh-sheet-diff-0.2.0.tgz` to install that tarball into a fresh isolated profile and dispatch the tools through the official boot entrypoint without a model call. The acceptance test needs `pnpm` on `PATH`; CI pins `pnpm@11.7.0`. Version 0.1 supported older previews; install its versioned release if you still use those hosts.
 
 Ask Harness:
 
 > Compare `before.xlsx` and `after.xlsx` using `OrderID` as the key. Save a SheetDiff report in `reviews/run-001`. Do not change either workbook.
 
-The plugin registers two tools:
+The plugin registers three tools:
 
 | Tool | Input | Result |
 | --- | --- | --- |
 | `sheet_diff_compare` | `before`, `after`, `keyColumns`, `outputDir`; optional `sheet`, `headerRow` | New HTML/JSON paths, hashes, summary and warnings |
-| `sheet_diff_review` | `reportJson`, `reviewJson` | Validated comments with the corresponding changes |
+| `sheet_diff_review` | `reportJson`, `reviewJson` | Validated review decisions and comments with their original changes |
+| `sheet_diff_handoff` | `reportJson`, `reviewJson`, `before`, `after`, `outputDir` | Fresh-file verification and new JSON/Markdown feedback paths |
 
 Paths must stay inside the current session workspace, including resolved symlink targets. Report creation needs a writable sandbox. Existing reports are never overwritten. If the second output write fails, the tool reports the retained first file rather than deleting it.
 
 The interactive report opens in a normal browser. A Harness preview that disables JavaScript cannot run its comment controls. There is no custom in-app spreadsheet editor in this release.
 
-## Review, then hand comments back
+## Review, then hand feedback back
 
-1. Open the HTML report, filter changes, and write comments beside the changes you want checked.
-2. Export the review JSON. Draft comments stay only in page memory until exported.
-3. Put the export inside the workspace and pass it, with the original report JSON, to `sheet_diff_review`.
+1. Open the HTML report. Mark changes **accepted**, **needs change** (with a reason), or **pending**. Omitted changes always remain pending. Filter by decision to work through the remaining items.
+2. Export the review JSON before closing the page. Import it into the same report to resume. Drafts stay in page memory until exported; there is no silent local persistence. Version 0.1 comment files still import, with pending status rather than inferred approval.
+3. Put the review JSON in the workspace. Ask Harness to call `sheet_diff_handoff` with the report, review, both current source paths and a new feedback directory. The tool verifies both source hashes **again**, then writes JSON and Markdown with decisions, comments, original differences and pending counts. It refuses stale source files before writing feedback.
+4. Give the handoff to your agent with the corrections you authorize. Keep the original and previously reviewed revision; write corrections to a new file. Compare that file against the original baseline and review the new report. Approvals and change IDs do not transfer automatically to another report.
 
-The CLI equivalent is:
+CLI equivalent:
 
 ```sh
-node src/cli.js review review-001/report.json review-comments.json
+sheet-diff handoff review-001/report.json review-comments.json --before before.xlsx --after after.xlsx --out feedback-001
 ```
 
-Comments must match the report ID, both input hashes and known change IDs. Old or unrelated reviews are rejected. A hash match is not a digital signature and does not prove that a report has not been deliberately rewritten. Comments and cell contents are untrusted data; this plugin never executes their instructions or applies their suggested edits.
+The lower-level `sheet-diff review report.json review.json` and `sheet_diff_review` validate the sidecar against the report only; **they do not reread source files**. Use `handoff` for freshness verification. A hash check records file identity at that moment, not a guarantee about later edits, report authenticity or formula correctness.
+
+Each sidecar is bound to the report ID, both input hashes and known change IDs. Unknown decisions, duplicate IDs, unrelated reviews and requests for changes without a reason are rejected. Import merges supplied entries and preserves current entries omitted from the file. Workbook values and review comments are quoted untrusted data; SheetDiff never executes them, calls a model or applies edits.
+
+### Use the workflow as a skill
+
+The bundle includes [`sheet-diff-review`](skills/sheet-diff-review/SKILL.md). Copy that folder into your agent's project skill root (for example `.agents/skills/` or `.dsh/skills/` in Harness, `.claude/skills/` in Claude Code). The agent still needs the SheetDiff CLI or Harness plugin installed. The skill guides baseline preservation, human decisions, verified handoff and re-comparison after corrections; it grants no extra editing or upload permission.
 
 ## Comparison rules
 
@@ -81,7 +89,7 @@ Comments must match the report ID, both input hashes and known change IDs. Old o
 - CSV is comma-delimited UTF-8, with quoted fields, embedded newlines and a BOM supported. Values remain text; CSV formulas are not inferred.
 - XLSX preserves the distinction between numbers, text, booleans, dates, errors and formulas. Formula text and saved cached results are separate aspects of a change. A cache is **not** a fresh calculation.
 - Dates stored as ISO 8601 cells (`t="d"`, for example with openpyxl `iso_dates=True`) are rejected because the underlying reader misreads them as numbers. Re-export using numeric Excel date storage (`iso_dates=False` in openpyxl); both the 1900 and 1904 date systems remain supported. Ordinary text containing an ISO date stays text. This check covers every worksheet, including unselected sheets.
-- Formula caches containing an explicit empty string are rejected in v0.1: the underlying reader cannot reliably distinguish them from a missing cache. Zero and false caches are preserved.
+- Formula caches containing an explicit empty string are rejected: the underlying reader cannot reliably distinguish them from a missing cache. Zero and false caches are preserved.
 - Formula text is compared literally. Moving a formula can change its A1 references while preserving meaning; SheetDiff does not normalize that equivalence.
 - Blank rows are skipped. Added/removed rows include their populated fields. Added/removed columns produce structural changes, plus cell changes for populated values in retained rows.
 - Sheet renames are reported as removal and addition. Key changes are reported as row removal and addition.
@@ -90,7 +98,7 @@ This is a table-data review tool, not a whole-workbook fidelity check. Formattin
 
 ## Limits and privacy
 
-Inputs are capped at 20 MiB each, XLSX expanded contents at 64 MiB and 8 MiB per ZIP part, and comparisons at 10,000 change records or 24 MiB of serialized changes. The parser also caps serialized cells/rows at 100,000 and checks expanded merge, column and validation ranges before parsing. Exceeding a limit fails the comparison; a shortened report is never presented as complete.
+Inputs are capped at 20 MiB each, XLSX expanded contents at 64 MiB and 8 MiB per ZIP part, and comparisons at 10,000 change records or 24 MiB of serialized changes. Each handoff artifact is capped at 32 MiB. The parser also caps serialized cells/rows at 100,000 and checks expanded merge, column and validation ranges before parsing. Exceeding a limit fails the comparison; a shortened report is never presented as complete.
 
 Reports include changed cell data, source filenames and hashes. Treat HTML, report JSON and review JSON as sensitive as the workbooks. Sharing is manual. The page has no remote resources, analytics or automatic persistence. When used inside an AI host, tool results and imported comments may be sent to that host's configured model as part of its normal operation.
 

@@ -37,9 +37,17 @@ export interface CompareOptions {
   sheet?: string;
   signal?: AbortSignal;
 }
-export interface Review {
+export interface LegacyReview {
   schemaVersion: 1;
   reportId: string;
   sourceHashes: { before: string; after: string };
   comments: { changeId: string; text: string }[];
 }
+export interface ReviewEntry { changeId: string; status: 'pending' | 'accepted' | 'needs-change'; text: string }
+export interface DecisionReview {
+  schemaVersion: 2;
+  reportId: string;
+  sourceHashes: { before: string; after: string };
+  entries: ReviewEntry[];
+}
+export type Review = LegacyReview | DecisionReview;

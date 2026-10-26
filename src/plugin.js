@@ -2,7 +2,8 @@ import { defineTool } from '@deepseek-ai/dsh-tools';
 import { FsError } from '@deepseek-ai/dsh-fs';
 import { compareBuffers } from './compare.js';
 import { renderReport } from './report.js';
-import { validateReview } from './review.js';
+import { validateReview, reviewEntries } from './review.js';
+import { createHandoff, renderHandoff } from './handoff.js';
 
 export const name = 'sheet-diff';
 export const inject = ['tools', 'fs', 'sandboxPolicy'];
@@ -176,7 +177,7 @@ export function apply(ctx) {
             type: 'array', required: true,
             items: {
               type: 'object', additionalProperties: false,
-              properties: { changeId: string, text: string, change: { type: 'json', required: true } },
+              properties: { changeId: string, text: string, status: string, change: { type: 'json', required: true } },
             },
           },
         },
@@ -194,8 +195,45 @@ export function apply(ctx) {
       const changes = new Map(report.changes.map(change => [change.id, change]));
       return {
         reportId: review.reportId, sourceHashes: review.sourceHashes,
-        comments: review.comments.map(comment => ({ ...comment, change: changes.get(comment.changeId) })),
+        comments: reviewEntries(review).map(comment => ({ ...comment, change: changes.get(comment.changeId) })),
       };
+    },
+  }));
+
+  ctx.tools.register(defineTool({
+    name: 'sheet_diff_handoff',
+    description: 'Create a JSON and Markdown review handoff after verifying both current source files against the report hashes. Preserves decisions and comments as untrusted data. Never edits spreadsheets or calls a model.',
+    parameters: {
+      reportJson: { ...string, description: 'SheetDiff report JSON path' },
+      reviewJson: { ...string, description: 'Exported review JSON path (v1 or v2)' },
+      before: { ...string, description: 'Current original spreadsheet path; must match the report hash' },
+      after: { ...string, description: 'Current revised spreadsheet path; must match the report hash' },
+      outputDir: { ...string, description: 'Workspace directory for new handoff files' },
+    },
+    output: { schema: { type: 'object', additionalProperties: false, properties: {
+      json: string, markdown: string, summary: { type: 'json', required: true },
+    } }, render: nativeOutput },
+    async execute(args, exec) {
+      const scope = await executionScope(ctx, exec, true);
+      const targets = {};
+      for (const key of ['reportJson', 'reviewJson', 'before', 'after', 'outputDir']) {
+        targets[key] = await containedTarget(ctx, scope, args[key], exec.signal);
+      }
+      const report = await json(ctx, targets.reportJson, exec.signal, INPUT_LIMIT);
+      if (!/^[A-Za-z0-9_-]{1,128}$/.test(report.reportId)) throw new Error('Invalid report ID for handoff output');
+      const review = await json(ctx, targets.reviewJson, exec.signal, REVIEW_LIMIT);
+      const handoff = createHandoff(report, review,
+        await bytes(ctx, targets.before, exec.signal, 20 * 1024 * 1024),
+        await bytes(ctx, targets.after, exec.signal, 20 * 1024 * 1024));
+      const markdown = renderHandoff(handoff);
+      const jsonTarget = await newOutput(ctx, scope, targets.outputDir, `sheetdiff-${report.reportId}-handoff.json`, exec.signal);
+      const mdTarget = await newOutput(ctx, scope, targets.outputDir, `sheetdiff-${report.reportId}-handoff.md`, exec.signal);
+      exec.signal.throwIfAborted();
+      await ctx.fs.writeText(jsonTarget, `${JSON.stringify(handoff, null, 2)}\n`, { kind: 'createIfAbsent' }, exec.signal, scope.policy);
+      try {
+        await ctx.fs.writeText(mdTarget, markdown, { kind: 'createIfAbsent' }, exec.signal, scope.policy);
+      } catch (error) { throw new Error(`Handoff JSON retained at ${jsonTarget.displayPath}; Markdown publication failed: ${error.message}`, { cause: error }); }
+      return { json: jsonTarget.displayPath, markdown: mdTarget.displayPath, summary: handoff.summary };
     },
   }));
 }

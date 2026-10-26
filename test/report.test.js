@@ -145,14 +145,38 @@ test('exports a validated Review JSON bound to report ID and source hashes', asy
   assert.equal(downloads.length, 1);
   assert.equal(downloads[0].type, 'application/json');
   assert.deepEqual(JSON.parse(await downloads[0].text()), {
-    schemaVersion: 1, reportId: 'report-01', sourceHashes: { before: 'a'.repeat(64), after: 'b'.repeat(64) },
-    comments: [{ changeId: 'change-1', text: 'Check <script> text & formula' }],
+    schemaVersion: 2, reportId: 'report-01', sourceHashes: { before: 'a'.repeat(64), after: 'b'.repeat(64) },
+    entries: [{ changeId: 'change-1', status: 'pending', text: 'Check <script> text & formula' }],
   });
   assert.equal(body.children[0].download, 'sheetdiff-review.json');
   assert.equal(body.children[0].href, 'blob:review');
   assert.equal(body.children[0].clicked, true);
   assert.equal(body.children[0].removed, true);
   assert.deepEqual(revoked, ['blob:review']);
+});
+
+test('review decisions survive export/import and missing changes remain pending', async () => {
+  const report = fixture([change(1), change(2), change(3)]);
+  const { nodes, downloads } = browser(report);
+  const selects = walk(nodes.get('change-list'), (node) => node.tag === 'select');
+  selects[0].value = 'accepted'; await selects[0].dispatch('change');
+  selects[1].value = 'needs-change'; await selects[1].dispatch('change');
+  await nodes.get('export-review').dispatch('click');
+  assert.equal(downloads.length, 0, 'requested corrections need a reason');
+  const comment = walk(nodes.get('change-list'), (node) => node.tag === 'textarea')[1];
+  comment.value = 'Keep the original formula'; await comment.dispatch('input');
+  await nodes.get('export-review').dispatch('click');
+  const exported = JSON.parse(await downloads[0].text());
+  assert.deepEqual(exported.entries.map((item) => item.status), ['accepted', 'needs-change']);
+  assert.match(nodes.get('review-progress').textContent, /1 已接受 · 1 需修改 · 1 待审/);
+  const restored = browser(report);
+  restored.nodes.get('review-file').files = [{ size: 1000, text: async () => JSON.stringify(exported) }];
+  await restored.nodes.get('review-file').dispatch('change');
+  assert.match(restored.nodes.get('review-progress').textContent, /1 已接受 · 1 需修改 · 1 待审/);
+  restored.nodes.get('decision-filter').value = 'needs-change';
+  await restored.nodes.get('decision-filter').dispatch('change');
+  assert.equal(restored.nodes.get('change-list').children.length, 1);
+  assert.equal(walk(restored.nodes.get('change-list'), (node) => node.tag === 'textarea')[0].value, 'Keep the original formula');
 });
 
 test('imports safe comment text and rejects mismatched, unknown, duplicate and oversized sidecars atomically', async () => {

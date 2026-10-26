@@ -38,6 +38,37 @@ test('real Harness dispatch returns canonical artifacts, preserves inputs, and u
     await fiber.dispose();
     assert.equal(ctx.tools.get('sheet_diff_compare'), undefined);
     assert.equal(ctx.tools.get('sheet_diff_review'), undefined);
+    assert.equal(ctx.tools.get('sheet_diff_handoff'), undefined);
+  } finally { await ctx.fiber.dispose(); }
+});
+
+test('handoff dispatch verifies actual files, refuses stale reviews, and enforces workspace policy', async () => {
+  const workspace = await fixture();
+  const { ctx } = await createHost(workspace);
+  try {
+    const compared = await dispatch(ctx, 'sheet_diff_compare', compareArgs);
+    assert.equal(compared.isError, false, errorText(compared));
+    const report = JSON.parse(await readFile(compared.value.paths.json, 'utf8'));
+    const reviewPath = join(workspace, 'decisions.json');
+    await writeFile(reviewPath, JSON.stringify({ schemaVersion: 2, reportId: report.reportId,
+      sourceHashes: compared.value.sourceHashes, entries: [{ changeId: report.changes[0].id, status: 'needs-change', text: 'Check this amount' }] }));
+    const args = { reportJson: compared.value.paths.json, reviewJson: reviewPath, before: 'before.csv', after: 'after.csv', outputDir: 'feedback' };
+    const result = await dispatch(ctx, 'sheet_diff_handoff', args);
+    assert.equal(result.isError, false, errorText(result));
+    assert.equal(result.value.summary.needsChange, 1);
+    assert.equal(JSON.parse(await readFile(result.value.json, 'utf8')).sourceFilesVerified, true);
+    assert.match(await readFile(result.value.markdown, 'utf8'), /untrusted quoted data/);
+    assert.equal((await dispatch(ctx, 'sheet_diff_handoff', args)).isError, true);
+    assert.equal((await dispatch(ctx, 'sheet_diff_handoff', { ...args, outputDir: '../escape' })).isError, true);
+    await writeFile(join(workspace, 'after.csv'), after + '4,Four,40\n');
+    const stale = await dispatch(ctx, 'sheet_diff_handoff', { ...args, outputDir: 'stale' });
+    assert.equal(stale.isError, true);
+    assert.match(errorText(stale), /Stale review/);
+    assert.ok(!(await readdir(workspace)).includes('stale'));
+    const readonly = await createHost(workspace, { mode: 'read-only' });
+    try {
+      assert.match(errorText(await dispatch(readonly.ctx, 'sheet_diff_handoff', args)), /workspace-write/);
+    } finally { await readonly.ctx.fiber.dispose(); }
   } finally { await ctx.fiber.dispose(); }
 });
 

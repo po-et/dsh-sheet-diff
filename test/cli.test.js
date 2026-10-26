@@ -28,6 +28,17 @@ test('CLI produces a report without editing inputs and refuses overwrites', asyn
   const imported = run('review', join(out, 'report.json'), reviewPath);
   assert.equal(imported.status, 0, imported.stderr);
   assert.equal(JSON.parse(imported.stdout).comments[0].change.id, report.changes[0].id);
+  const handoffDir = join(directory, 'handoff');
+  const handoffArgs = ['handoff', join(out, 'report.json'), reviewPath, '--before', before, '--after', after, '--out', handoffDir];
+  const handedOff = run(...handoffArgs);
+  assert.equal(handedOff.status, 0, handedOff.stderr);
+  assert.equal(JSON.parse(await readFile(join(handoffDir, 'handoff.json'), 'utf8')).sourceFilesVerified, true);
+  assert.notEqual(run(...handoffArgs).status, 0, 'handoff cannot overwrite its own artifacts');
+  await writeFile(after, 'id,value\na,999\n');
+  const staleDir = join(directory, 'stale');
+  const stale = run(...handoffArgs.slice(0, -1), staleDir);
+  assert.notEqual(stale.status, 0);
+  assert.match(stale.stderr, /Stale review/);
 });
 test('CLI rejects invalid options and ambiguous duplicate keys', async () => {
   assert.notEqual(run('a.csv', 'b.csv', '--wat', 'x').status, 0);

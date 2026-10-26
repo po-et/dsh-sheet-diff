@@ -39,6 +39,7 @@ export async function createHost(workspace, { mode = 'workspace-write', bundle =
     }
     assert.ok(ctx.tools.get('sheet_diff_compare'), 'host registered compare tool');
     assert.ok(ctx.tools.get('sheet_diff_review'), 'host registered review tool');
+    assert.ok(ctx.tools.get('sheet_diff_handoff'), 'host registered handoff tool');
     return { ctx, fiber };
   } catch (error) {
     await ctx.fiber.dispose();
@@ -80,6 +81,13 @@ export async function runSmoke() {
     const reviewed = await dispatch(ctx, 'sheet_diff_review', { reportJson: compared.value.paths.json, reviewJson: reviewPath });
     assert.equal(reviewed.isError, false, JSON.stringify(reviewed));
     assert.deepEqual(reviewed.value.comments[0].change, change);
+    const handoff = await dispatch(ctx, 'sheet_diff_handoff', {
+      reportJson: compared.value.paths.json, reviewJson: reviewPath,
+      before: 'before.csv', after: 'after.csv', outputDir: 'handoff',
+    });
+    assert.equal(handoff.isError, false, JSON.stringify(handoff));
+    assert.equal(handoff.value.summary.pending, 2);
+    assert.ok((await readFile(handoff.value.markdown, 'utf8')).includes('untrusted'));
     const collision = await dispatch(ctx, 'sheet_diff_compare', args);
     assert.equal(collision.isError, true);
     assert.match(JSON.stringify(collision.content), /never overwrites/);
@@ -98,6 +106,7 @@ export async function runSmoke() {
       profileBoot: 'CLI profile install/boot is outside this smoke',
       versions, workspace, paths: compared.value.paths,
       summary: compared.value.summary, validatedComments: reviewed.value.comments.length,
+      handoff: handoff.value,
     };
   } finally {
     process.chdir(previousCwd);

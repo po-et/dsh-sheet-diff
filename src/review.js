@@ -50,27 +50,39 @@ export function validateReview(report, review) {
   const keys = (v, expected) => object(v) && Object.keys(v).sort().join(',') === expected.slice().sort().join(',');
   if (!object(report) || report.schemaVersion !== 1 || typeof report.reportId !== 'string'
     || !object(report.sources?.before) || !object(report.sources?.after) || !Array.isArray(report.changes)) fail('invalid report');
-  if (!keys(review, ['schemaVersion', 'reportId', 'sourceHashes', 'comments']) || review.schemaVersion !== 1) fail('unsupported schema');
+  const v2 = review?.schemaVersion === 2;
+  if (!keys(review, ['schemaVersion', 'reportId', 'sourceHashes', v2 ? 'entries' : 'comments'])
+    || ![1, 2].includes(review.schemaVersion)) fail('unsupported schema');
   if (review.reportId !== report.reportId) fail('this review belongs to a different report');
   if (!keys(review.sourceHashes, ['before', 'after'])
     || review.sourceHashes.before !== report.sources.before.sha256
     || review.sourceHashes.after !== report.sources.after.sha256) fail('source hashes do not match');
-  if (!Array.isArray(review.comments) || review.comments.length > 10000) fail('too many comments');
+  const items = v2 ? review.entries : review.comments;
+  if (!Array.isArray(items) || items.length > 10000) fail('too many review entries');
   const known = new Set(report.changes.map((c) => c.id));
   const seen = new Set();
-  const comments = review.comments.map((c) => {
-    if (!keys(c, ['changeId', 'text']) || typeof c.changeId !== 'string' || !known.has(c.changeId)) fail('unknown change id');
+  const entries = items.map((c) => {
+    if (!keys(c, v2 ? ['changeId', 'status', 'text'] : ['changeId', 'text'])
+      || typeof c.changeId !== 'string' || !known.has(c.changeId)) fail('unknown change id');
     if (seen.has(c.changeId)) fail('duplicate change id');
     seen.add(c.changeId);
-    if (typeof c.text !== 'string' || !c.text.trim() || c.text.length > 4000) fail('comment must contain 1–4000 characters');
-    return { changeId: c.changeId, text: c.text };
+    if (typeof c.text !== 'string' || c.text.length > 4000 || (!v2 && !c.text.trim())) fail('comment must contain 1–4000 characters');
+    if (v2 && !['pending', 'accepted', 'needs-change'].includes(c.status)) fail('unknown review status');
+    if (v2 && c.status === 'needs-change' && !c.text.trim()) fail('changes requested require a comment');
+    if (v2 && c.status === 'pending' && !c.text.trim()) fail('empty pending entry');
+    return { changeId: c.changeId, ...(v2 ? { status: c.status } : {}), text: c.text };
   });
   const result = {
-    schemaVersion: 1,
+    schemaVersion: review.schemaVersion,
     reportId: review.reportId,
     sourceHashes: { before: review.sourceHashes.before, after: review.sourceHashes.after },
-    comments,
+    [v2 ? 'entries' : 'comments']: entries,
   };
   if (new TextEncoder().encode(JSON.stringify(result)).byteLength > 5 * 1024 * 1024) fail('review exceeds 5 MiB');
   return result;
+}
+
+/** Legacy comments carry no approval decision. Omitted changes remain pending. */
+export function reviewEntries(review) {
+  return review.schemaVersion === 2 ? review.entries : review.comments.map((item) => ({ ...item, status: 'pending' }));
 }
