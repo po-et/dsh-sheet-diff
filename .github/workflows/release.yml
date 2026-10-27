@@ -8,7 +8,7 @@ on:
       tag:
         description: Existing version tag to publish
         required: true
-        default: v0.2.0
+        default: v0.2.1
 
 permissions:
   contents: read
@@ -26,7 +26,7 @@ jobs:
       matrix:
         harness: ['0.2.1-rc.2', '0.2.1-rc.3']
     env:
-      RELEASE_TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || 'v0.2.0' }}
+      RELEASE_TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || 'v0.2.1' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -55,7 +55,7 @@ jobs:
     permissions:
       contents: write
     env:
-      RELEASE_TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || 'v0.2.0' }}
+      RELEASE_TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || 'v0.2.1' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -73,10 +73,12 @@ jobs:
         run: |
           mkdir release-artifacts
           npm pack --ignore-scripts --pack-destination release-artifacts
+          node scripts/demo.js --out release-artifacts/sample
+          (cd release-artifacts/sample && zip -q ../sheetdiff-demo-${RELEASE_TAG#v}.zip index.html report.html report.json orders-before.xlsx orders-after.xlsx README.txt)
           cd release-artifacts
-          sha256sum dsh-sheet-diff-*.tgz > SHA256SUMS
+          sha256sum dsh-sheet-diff-*.tgz sheetdiff-demo-*.zip > SHA256SUMS
       - name: Publish versioned bundle
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$RELEASE_TAG" release-artifacts/dsh-sheet-diff-*.tgz release-artifacts/SHA256SUMS --repo "$GITHUB_REPOSITORY" --verify-tag --title "SheetDiff $RELEASE_TAG" --notes-file CHANGELOG.md
+          gh release create "$RELEASE_TAG" release-artifacts/dsh-sheet-diff-*.tgz release-artifacts/sheetdiff-demo-*.zip release-artifacts/SHA256SUMS --repo "$GITHUB_REPOSITORY" --verify-tag --title "SheetDiff $RELEASE_TAG" --notes-file CHANGELOG.md

@@ -1,3 +1,11 @@
+# SheetDiff v0.2.1
+
+- Fix first-run CLI examples such as `--out reviews/round-1`: missing parent directories are now created for comparisons and handoffs. The output directory itself must still be new, and invalid inputs are rejected before output directories are created.
+- Add an install-free, offline sample ZIP to the release. Extract it and open `index.html` to review a synthetic order-table edit, export a decision, and import it again. The sample includes both source workbooks and the report JSON, so its exported review can be checked by the CLI.
+- Keep the source-checkout instructions consistent from comparison through handoff; cloning and installing dependencies does not install a global `sheet-diff` command.
+
+Harness compatibility remains `0.2.1-rc.2` and `0.2.1-rc.3`. The sample uses the same comparator and renderer as the plugin. SHA256SUMS covers both the plugin bundle and sample ZIP.
+
 # SheetDiff v0.2.0
 
 Review changes all the way through to a new revision:

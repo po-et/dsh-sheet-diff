@@ -1,6 +1,6 @@
 {
   "name": "dsh-sheet-diff",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Read-only, key-aligned spreadsheet review for DeepSeek Harness",
   "type": "module",
   "license": "MIT",

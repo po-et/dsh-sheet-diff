@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -9,7 +9,7 @@ const cli = fileURLToPath(new URL('../src/cli.js', import.meta.url));
 const run = (...args) => spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8' });
 test('CLI produces a report without editing inputs and refuses overwrites', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'sheetdiff-cli-'));
-  const before = join(directory, 'before.csv'), after = join(directory, 'after.csv'), out = join(directory, 'review');
+  const before = join(directory, 'before.csv'), after = join(directory, 'after.csv'), out = join(directory, 'reviews', 'round-1');
   await writeFile(before, 'id,value\na,1\nb,2\n');
   await writeFile(after, 'value,id\n2,b\n3,a\n');
   const result = run(before, after, '--key', 'id', '--out', out);
@@ -28,17 +28,18 @@ test('CLI produces a report without editing inputs and refuses overwrites', asyn
   const imported = run('review', join(out, 'report.json'), reviewPath);
   assert.equal(imported.status, 0, imported.stderr);
   assert.equal(JSON.parse(imported.stdout).comments[0].change.id, report.changes[0].id);
-  const handoffDir = join(directory, 'handoff');
+  const handoffDir = join(directory, 'feedback', 'round-1');
   const handoffArgs = ['handoff', join(out, 'report.json'), reviewPath, '--before', before, '--after', after, '--out', handoffDir];
   const handedOff = run(...handoffArgs);
   assert.equal(handedOff.status, 0, handedOff.stderr);
   assert.equal(JSON.parse(await readFile(join(handoffDir, 'handoff.json'), 'utf8')).sourceFilesVerified, true);
   assert.notEqual(run(...handoffArgs).status, 0, 'handoff cannot overwrite its own artifacts');
   await writeFile(after, 'id,value\na,999\n');
-  const staleDir = join(directory, 'stale');
+  const staleDir = join(directory, 'stale-feedback', 'round-1');
   const stale = run(...handoffArgs.slice(0, -1), staleDir);
   assert.notEqual(stale.status, 0);
   assert.match(stale.stderr, /Stale review/);
+  await assert.rejects(stat(join(directory, 'stale-feedback')), { code: 'ENOENT' });
 });
 test('CLI rejects invalid options and ambiguous duplicate keys', async () => {
   assert.notEqual(run('a.csv', 'b.csv', '--wat', 'x').status, 0);
@@ -46,7 +47,8 @@ test('CLI rejects invalid options and ambiguous duplicate keys', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'sheetdiff-cli-'));
   const file = join(directory, 'duplicate.csv');
   await writeFile(file, 'id,value\nx,1\nx,2\n');
-  const result = run(file, file, '--key', 'id', '--out', join(directory, 'review'));
+  const result = run(file, file, '--key', 'id', '--out', join(directory, 'invalid-reviews', 'round-1'));
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /duplicate/i);
+  await assert.rejects(stat(join(directory, 'invalid-reviews')), { code: 'ENOENT' });
 });

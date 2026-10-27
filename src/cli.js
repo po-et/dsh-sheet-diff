@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { open, mkdir, writeFile } from 'node:fs/promises';
-import { basename, resolve, join } from 'node:path';
+import { basename, dirname, resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { compareBuffers } from './compare.js';
 import { renderReport } from './report.js';
@@ -55,6 +55,7 @@ export async function main(argv = process.argv.slice(2)) {
     const handoff = createHandoff(report, review, await readBounded(options['--before'], 20 * 1024 * 1024), await readBounded(options['--after'], 20 * 1024 * 1024));
     const markdown = renderHandoff(handoff);
     const out = resolve(options['--out']);
+    await mkdir(dirname(out), { recursive: true });
     await mkdir(out);
     try {
       await writeFile(join(out, 'handoff.json'), `${JSON.stringify(handoff, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
@@ -94,7 +95,8 @@ export async function main(argv = process.argv.slice(2)) {
   const html = renderReport(report);
   const reportJson = `${JSON.stringify(report)}\n`;
   if (Buffer.byteLength(reportJson) > 32 * 1024 * 1024) throw new Error('Report exceeds the 32 MiB review-input limit. Compare smaller tables.');
-  // A newly created directory and exclusive writes prevent accidental overwrites.
+  // Create missing parents, but require a new leaf directory to prevent overwrites.
+  await mkdir(dirname(out), { recursive: true });
   await mkdir(out);
   try {
     await writeFile(join(out, 'report.json'), reportJson, { flag: 'wx', mode: 0o600 });

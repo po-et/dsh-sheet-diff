@@ -43,7 +43,8 @@ const profileManifest = JSON.parse(await readFile(join(profile, 'package.json'),
 assert.ok(profileManifest.dsh.profile.bundles.includes('dsh-sheet-diff'));
 const installedPlugin = join(profile, 'node_modules/dsh-sheet-diff');
 const pluginManifest = JSON.parse(await readFile(join(installedPlugin, 'package.json'), 'utf8'));
-assert.equal(pluginManifest.version, '0.2.0');
+const expectedVersion = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
+assert.equal(pluginManifest.version, expectedVersion);
 await writeFile(join(profile, 'cordis.patch.yml'), '- id: hmr\n  disabled: true\n');
 const original = 'id,name,amount\n1,Alice,10\n2,Bob,20\n';
 const revised = 'id,name,amount\n2,Bob,20\n1,Alice,11\n3,Carol,30\n';
