@@ -17,7 +17,7 @@ const installation = resolve(installationArg);
 const tarball = resolve(tarballArg);
 const manifest = JSON.parse(await readFile(join(installation, 'package.json'), 'utf8'));
 assert.equal(manifest.name, '@deepseek-ai/dsh');
-assert.ok(['0.2.1-rc.2', '0.2.1-rc.3'].includes(manifest.version), 'use a supported host version');
+assert.ok(['0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.4', '0.2.2-alpha.2'].includes(manifest.version), 'use a supported host version');
 const lab = await mkdtemp(join(tmpdir(), `sheetdiff-profile-${manifest.version}-`));
 const workspace = join(lab, 'workspace');
 await mkdir(workspace);
@@ -64,8 +64,19 @@ try {
   }));
   const toolNames = ['sheet_diff_compare', 'sheet_diff_review', 'sheet_diff_handoff'];
   for (const name of toolNames) assert.ok(ctx.tools.get(name), `${name} registered after official profile boot`);
+  const dispatch = async (callId, name, args) => {
+    const signal = new AbortController().signal;
+    if (manifest.version === '0.2.2-alpha.2') {
+      // 0.2.2 delegates raw call batches to the configured tool executor.
+      const batch = await ctx.tools.execute({ calls: [{ id: callId, name, arguments: JSON.stringify(args) }], signal });
+      assert.equal(batch.results.length, 1);
+      assert.equal(batch.results[0].callId, callId);
+      return batch.results[0].result;
+    }
+    return ctx.tools.execute({ callId, name, arguments: args, signal });
+  };
   const execute = async (name, args) => {
-    const result = await ctx.tools.execute({ callId: `profile-${name}`, name, arguments: args, signal: new AbortController().signal });
+    const result = await dispatch(`profile-${name}`, name, args);
     assert.equal(result.isError, false, JSON.stringify(result));
     return result.value;
   };
@@ -91,13 +102,13 @@ try {
   const feedback = JSON.parse(await readFile(handoff.json, 'utf8'));
   assert.equal(feedback.entries[0].text, review.entries[0].text);
   assert.ok((await readFile(handoff.markdown, 'utf8')).includes('untrusted'));
-  const collision = await ctx.tools.execute({ callId: 'collision', name: 'sheet_diff_compare', arguments: comparisonArgs, signal: new AbortController().signal });
+  const collision = await dispatch('collision', 'sheet_diff_compare', comparisonArgs);
   assert.equal(collision.isError, true);
   assert.match(JSON.stringify(collision.content), /never overwrites/);
   assert.equal(await readFile(join(workspace, 'before.csv'), 'utf8'), original);
   assert.equal(await readFile(join(workspace, 'after.csv'), 'utf8'), revised);
   await writeFile(join(workspace, 'after.csv'), `${revised}4,Changed,40\n`);
-  const stale = await ctx.tools.execute({ callId: 'stale', name: 'sheet_diff_handoff', arguments: { ...handoffArgs, outputDir: 'stale' }, signal: new AbortController().signal });
+  const stale = await dispatch('stale', 'sheet_diff_handoff', { ...handoffArgs, outputDir: 'stale' });
   assert.equal(stale.isError, true);
   assert.match(JSON.stringify(stale.content), /hash|changed|match/i);
   const pluginEntry = [...ctx.loader.entries()].find((entry) => entry.options.name === 'dsh-sheet-diff');

@@ -1,6 +1,6 @@
 {
   "name": "dsh-sheet-diff",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Read-only, key-aligned spreadsheet review for DeepSeek Harness",
   "type": "module",
   "license": "MIT",
@@ -22,10 +22,10 @@
   },
   "dependencies": { "exceljs": "4.4.0", "yauzl": "3.4.0" },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "~4.0.5",
-    "@deepseek-ai/dsh-tools": "0.2.1-rc.2 || 0.2.1-rc.3",
-    "@deepseek-ai/dsh-fs": "0.2.1-rc.2 || 0.2.1-rc.3",
-    "@deepseek-ai/dsh-sandbox-policy": "0.2.1-rc.2 || 0.2.1-rc.3"
+    "@deepseek-ai/cordis": "~4.0.5 || 4.0.6-alpha.1",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.4 || 0.2.2-alpha.2",
+    "@deepseek-ai/dsh-fs": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.4 || 0.2.2-alpha.2",
+    "@deepseek-ai/dsh-sandbox-policy": "0.2.1-rc.2 || 0.2.1-rc.3 || 0.2.1-rc.4 || 0.2.2-alpha.2"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.5",

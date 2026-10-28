@@ -1,3 +1,9 @@
+# SheetDiff v0.2.2
+
+- Accept Harness `0.2.1-rc.4` and `0.2.2-alpha.2` explicitly, including the alpha host's Cordis `4.0.6-alpha.1`. Keep rc.2 and rc.3 support. The previous bundle was rejected by both new hosts during an actual `dsh plugin add`.
+- Exercise the packed bundle through fresh official profiles on both new hosts: comparison, review import, hash-verified handoff, overwrite refusal, stale-source refusal and tool disposal pass. No plugin behavior changed.
+- Adapt profile acceptance to alpha.2's batch tool-execution API and extend test/release acceptance to all four supported hosts. These checks use synthetic files without a model call.
+
 # SheetDiff v0.2.1
 
 - Fix first-run CLI examples such as `--out reviews/round-1`: missing parent directories are now created for comparisons and handoffs. The output directory itself must still be new, and invalid inputs are rejected before output directories are created.
